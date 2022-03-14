@@ -1,0 +1,447 @@
+/**
+ *    author:  tourist
+ *    created: 09.05.1945 00:43:00
+**/
+
+#include <iostream>
+
+using namespace std;
+
+template<typename T>
+class Set {
+public:
+    struct node;
+
+    class iterator {
+    public:
+        iterator() {
+            set_ = nullptr;
+            root_ = nullptr;
+        }
+
+        iterator(Set* set) {
+            set_ = set;
+            root_ = nullptr;
+        }
+
+        iterator(Set* set, node* root) {
+            root_ = root;
+            set_ = set;
+        }
+
+        iterator& operator=(const iterator& iter) {
+            set_ = iter.set_;
+            root_ = iter.root_;
+            return *this;
+        }
+
+        const T operator*() const {
+            return root_->value;
+        }
+
+        const T* operator->() const {
+            return &root_->value;
+        }
+
+        iterator& operator++() {
+            root_ = set_->Next(root_);
+            return *this;
+        }
+
+        iterator operator++(int) {
+            root_ = set_->Next(root_);
+            return *this;
+        }
+
+        iterator& operator--() {
+            root_ = set_->Previous(root_);
+            return *this;
+        }
+
+        iterator operator--(int) {
+            root_ = set_->Previous(root_);
+            return *this;
+        }
+
+        bool operator==(const iterator& another_it) {
+            return (set_ == another_it.set_ && root_ == another_it.root_);
+        }
+
+        bool operator!=(const iterator& another_it) {
+            return (set_ != another_it.set_ || root_ != another_it.root_);
+        }
+
+    private:
+        Set* set_;
+        node* root_;
+    };
+
+    friend class iterator;
+
+    struct node {
+        T value;
+        node *left, *right;
+        node* parent;
+        int height = 0;
+        iterator iter;
+
+        node(T new_value, Set* set) : iter(set, this) {
+            value = new_value;
+            left = right = parent = nullptr;
+            height = 1;
+        }
+
+        node(const node* another_node, Set* set) : iter(set, this) {
+            value = another_node->value;
+            height = another_node->height;
+            if (another_node->left == nullptr) {
+                left = nullptr;
+            } else {
+                left = new node(another_node->left, set);
+                left->parent = this;
+            }
+            if (another_node->right == nullptr) {
+                right = nullptr;
+            } else {
+                right = new node(another_node->right, set);
+                right->parent = this;
+            }
+        }
+
+        ~node() {
+            delete left;
+            delete right;
+        }
+    };
+
+    int GetHeight(node* root) {
+        if (root == nullptr) {
+            return 0;
+        }
+        return root->height;
+    }
+
+    int GetBalance(node* root) {
+        if (root == nullptr) {
+            return 0;
+        }
+        return GetHeight(root->right) - GetHeight(root->left);
+    }
+
+    void Update(node* root) {
+        if (root == nullptr) {
+            return;
+        }
+        root->height = max(GetHeight(root->left), GetHeight(root->right)) + 1;
+        if (root->left != nullptr) {
+            root->left->parent = root;
+        }
+        if (root->right != nullptr) {
+            root->right->parent = root;
+        }
+    }
+
+    node* RightRotate(node* root) {
+        node* left_root = root->left;
+        root->left = left_root->right;
+        left_root->right = root;
+        Update(root);
+        Update(left_root);
+        left_root->parent = nullptr;
+        return left_root;
+    }
+
+    node* LeftRotate(node* root) {
+        node* right_root = root->right;
+        root->right = right_root->left;
+        right_root->left = root;
+        Update(root);
+        Update(right_root);
+        right_root->parent = nullptr;
+        return right_root;
+    }
+
+    node* Balancing(node* root) {
+        Update(root);
+        if (GetBalance(root) == 2) {
+            if (GetBalance(root->right) < 0) {
+                root->right = RightRotate(root->right);
+                Update(root->right);
+            }
+            root = LeftRotate(root);
+            return root;
+        }
+        if (GetBalance(root) == -2) {
+            if (GetBalance(root->left) > 0) {
+                root->left = LeftRotate(root->left);
+                Update(root);
+            }
+            root = RightRotate(root);
+            return root;
+        }
+        return root;
+    }
+
+    pair<node*, bool> Insert(node* root, T inserted_value, Set* set) {
+        if (root == nullptr) {
+            return {new node(inserted_value, set), 1};
+        }
+        if (root->value < inserted_value) {
+            pair<node*, bool> result = Insert(root->right, inserted_value, set);
+            root->right = result.first;
+            root = Balancing(root);
+            return {root, result.second};
+        }
+        if (inserted_value < root->value) {
+            pair<node*, bool> result = Insert(root->left, inserted_value, set);
+            root->left = result.first;
+            root = Balancing(root);
+            return {root, result.second};
+        }
+        return {root, 0};
+    }
+
+    node* GetMin(node* root) {
+        if (root == nullptr) {
+            return nullptr;
+        }
+        if (root->left == nullptr) {
+            return root;
+        }
+        return GetMin(root->left);
+    }
+
+    node* GetMax(node* root) {
+        if (root == nullptr) {
+            return nullptr;
+        }
+        if (root->right == nullptr) {
+            return root;
+        }
+        return GetMax(root->right);
+    }
+
+    node* EraseMin(node* root) {
+        if (root->left == nullptr) {
+            if (root->right != nullptr) {
+                root->right->parent = nullptr;
+            }
+            return root->right;
+        }
+        root->left = EraseMin(root->left);
+        root = Balancing(root);
+        return root;
+    }
+
+    pair<node*, bool> Erase(node* root, T erased_value) {
+        if (root == nullptr) {
+            return {root, 0};
+        }
+        if (erased_value < root->value) {
+            pair<node*, bool> result = Erase(root->left, erased_value);
+            root->left = result.first;
+            root = Balancing(root);
+            return {root, result.second};
+        } else {
+            if (root->value < erased_value) {
+                pair<node*, bool> result = Erase(root->right, erased_value);
+                root->right = result.first;
+                root = Balancing(root);
+                return {root, result.second};
+            } else {
+                node *left = root->left, *right = root->right;
+                root->left = root->right = nullptr;
+                delete root;
+                if (right == nullptr) {
+                    return {left, 1};
+                }
+                node* new_root = GetMin(right);
+                new_root->right = EraseMin(right);
+                new_root->parent = nullptr;
+                new_root->left = left;
+                new_root = Balancing(new_root);
+                return {new_root, 1};
+            }
+        }
+    }
+
+    Set() {
+        tree_root_ = first_ = last_ = nullptr;
+        nodes_count_ = 0;
+        end_ = {this};
+    }
+
+    template<typename Iterator>
+    Set(Iterator first, Iterator last) {
+        tree_root_ = nullptr;
+        nodes_count_ = 0;
+        while (first != last) {
+            pair<node*, bool> result = Insert(tree_root_, *first, this);
+            tree_root_ = result.first;
+            nodes_count_ += result.second;
+            first++;
+        }
+        first_ = GetMin(tree_root_);
+        last_ = GetMax(tree_root_);
+        end_ = {this};
+    }
+
+    Set(initializer_list<T> elems) {
+        tree_root_ = nullptr;
+        nodes_count_ = 0;
+        for (T element : elems) {
+            pair<node*, bool> result = Insert(tree_root_, element, this);
+            tree_root_ = result.first;
+            nodes_count_ += result.second;
+        }
+        first_ = GetMin(tree_root_);
+        last_ = GetMax(tree_root_);
+        end_ = {this};
+    }
+
+    Set(const Set& another_set) {
+        if (another_set.tree_root_ == nullptr) {
+            nodes_count_ = 0;
+            tree_root_ = nullptr;
+            return;
+        }
+        nodes_count_ = another_set.nodes_count_;
+        tree_root_ = new node(another_set.tree_root_, this);
+        first_ = GetMin(tree_root_);
+        last_ = GetMax(tree_root_);
+        end_ = {this};
+    }
+
+    Set& operator=(const Set& another_set) {
+        if (&another_set == this) {
+            return *this;
+        }
+        delete tree_root_;
+        if (another_set.tree_root_ == nullptr) {
+            nodes_count_ = 0;
+            tree_root_ = nullptr;
+        } else {
+            nodes_count_ = another_set.nodes_count_;
+            tree_root_ = new node(another_set.tree_root_, this);
+        }
+        first_ = GetMin(tree_root_);
+        last_ = GetMax(tree_root_);
+        end_ = {this};
+        return *this;
+    }
+
+    ~Set() {
+        delete tree_root_;
+    }
+
+    size_t size() const {
+        return nodes_count_;
+    }
+
+    bool empty() const {
+        return (nodes_count_ == 0);
+    }
+
+    void insert(T element) {
+        pair<node*, bool> result = Insert(tree_root_, element, this);
+        nodes_count_ += result.second;
+        tree_root_ = result.first;
+        first_ = GetMin(tree_root_);
+        last_ = GetMax(tree_root_);
+    }
+
+    void erase(T element) {
+        pair<node*, bool> result = Erase(tree_root_, element);
+        nodes_count_ -= result.second;
+        tree_root_ = result.first;
+        first_ = GetMin(tree_root_);
+        last_ = GetMax(tree_root_);
+    }
+
+    node* Next(node* root) {
+        if (root == last_) {
+            return nullptr;
+        }
+        if (root->right != nullptr) {
+            return GetMin(root->right);
+        }
+        T value = root->value;
+        root = root->parent;
+        while (root->value < value) {
+            value = root->value;
+            root = root->parent;
+        }
+        return root;
+    }
+
+    node* Previous(node* root) {
+        if (root == nullptr) {
+            return last_;
+        }
+        if (root->left != nullptr) {
+            return GetMax(root->left);
+        }
+        T value = root->value;
+        root = root->parent;
+        while (value < root->value) {
+            value = root->value;
+            root = root->parent;
+        }
+        return root;
+    }
+
+    iterator begin() const {
+        if (first_ == nullptr) {
+            return end_;
+        }
+        return first_->iter;
+    }
+
+    iterator end() const {
+        return end_;
+    }
+
+    iterator find(T value) const {
+        node *current_node = tree_root_;
+        while (current_node != nullptr) {
+            if (current_node->value < value) {
+                current_node = current_node->right;
+            } else {
+                if (value < current_node->value) {
+                    current_node = current_node->left;
+                } else {
+                    return current_node->iter;
+                }
+            }
+        }
+        return end();
+    }
+
+    iterator lower_bound(T value) const {
+        node *answer = nullptr, *current_node = tree_root_;
+        while (current_node != nullptr) {
+            if (current_node->value < value) {
+                current_node = current_node->right;
+            } else {
+                if (value < current_node->value) {
+                    answer = current_node;
+                    current_node = current_node->left;
+                } else {
+                    answer = current_node;
+                    break;
+                }
+            }
+        }
+        if (answer == nullptr) {
+            return end_;
+        }
+        return answer->iter;
+    }
+
+private:
+    node *tree_root_ = nullptr;
+    node *first_ = nullptr, *last_ = nullptr;
+    size_t nodes_count_ = 0;
+    iterator end_;
+};
+
